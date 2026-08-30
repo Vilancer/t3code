@@ -8,7 +8,7 @@ import * as NodeSqliteClient from "../NodeSqliteClient.ts";
 
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
 
-layer("041_AuthSessionClientConnection", (it) => {
+layer("045_AuthSessionClientConnection", (it) => {
   it.effect("adds nullable client surface and app version columns to auth sessions", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
