@@ -30,6 +30,11 @@ import { OtlpTracer } from "effect/unstable/observability";
 import * as ServerConfig from "./config.ts";
 import { ASSET_ROUTE_PREFIX, resolveAsset } from "./assets/AssetAccess.ts";
 import { MIRROR_BUNDLE_ROUTE_PREFIX, MirrorBundleTransfer } from "./mirror/MirrorBundleTransfer.ts";
+import {
+  ATTACHMENT_UPLOAD_ROUTE_PREFIX,
+  storeAttachmentUpload,
+  validateAttachmentUploadToken,
+} from "./assets/AttachmentUpload.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { traceRelayRequest } from "./cloud/traceRelayRequest.ts";
@@ -47,11 +52,57 @@ const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
 const DESKTOP_RENDERER_ORIGINS = ["t3code://app", "t3code-dev://app"];
 const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
-export function assetResponseHeaders(filePath: string): Record<string, string> {
+// Types a browser may render as a document if a proxy strips the disposition
+// header. Downloads of these fall back to octet-stream.
+const DOWNLOAD_MIME_TYPE_PATTERN = /^[\w!#$&^.+-]+\/[\w!#$&^.+-]+$/;
+const isSafeDownloadMimeType = (mimeType: string): boolean =>
+  DOWNLOAD_MIME_TYPE_PATTERN.test(mimeType) &&
+  !/(?:^text\/html$|\/xml(?:$|-)|\+xml$)/i.test(mimeType.trim().toLowerCase());
+
+/** RFC 6266 disposition with an ASCII fallback name plus a UTF-8 `filename*`. */
+export function downloadContentDisposition(fileName?: string): string {
+  if (fileName === undefined) {
+    return "attachment";
+  }
+  // toWellFormed: encodeURIComponent throws URIError on unpaired surrogates.
+  // eslint-disable-next-line no-control-regex -- Header filenames must strip ASCII controls.
+  const sanitized = fileName.toWellFormed().replace(/[\u0000-\u001f"\\]/g, "_");
+  const asciiFallback = sanitized.replace(/[^\u0020-\u007e]/g, "_");
+  const needsExtended = asciiFallback !== sanitized;
+  const extendedName = encodeURIComponent(sanitized).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${asciiFallback}"${
+    needsExtended ? `; filename*=UTF-8''${extendedName}` : ""
+  }`;
+}
+
+export function assetResponseHeaders(
+  filePath: string,
+  options?: {
+    readonly download?: boolean;
+    readonly fileName?: string;
+    readonly mimeType?: string;
+  },
+): Record<string, string> {
+  const lowerPath = filePath.toLowerCase();
   return {
     "Cache-Control": "private, max-age=3600",
     "X-Content-Type-Options": "nosniff",
-    ...(filePath.toLowerCase().endsWith(".svg")
+    ...(options?.download
+      ? {
+          "Content-Disposition": downloadContentDisposition(options.fileName),
+          "Content-Security-Policy": "default-src 'none'; sandbox",
+          "Content-Type":
+            options.mimeType !== undefined && isSafeDownloadMimeType(options.mimeType)
+              ? options.mimeType
+              : "application/octet-stream",
+        }
+      : lowerPath.endsWith(".html") || lowerPath.endsWith(".htm")
+        ? { "Content-Type": "text/html; charset=utf-8" }
+        : {}),
+    ...(!options?.download && lowerPath.endsWith(".svg")
       ? { "Content-Security-Policy": SVG_CONTENT_SECURITY_POLICY }
       : {}),
   };
@@ -110,7 +161,10 @@ const authenticateRawRouteWithScope = (
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
     const session = yield* serverAuth.authenticateHttpRequest(request).pipe(
       Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
-        failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
+        failEnvironmentAuthInvalid(
+          EnvironmentAuth.serverAuthCredentialReason(error),
+          EnvironmentAuth.serverAuthDpopFailureReason(error),
+        ),
       ),
       Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
         failEnvironmentInternal("internal_error", error),
@@ -221,7 +275,16 @@ export const assetRouteLayer = HttpRouter.add(
     }
     return yield* HttpServerResponse.file(asset.path, {
       status: 200,
-      headers: assetResponseHeaders(asset.path),
+      headers: assetResponseHeaders(
+        asset.path,
+        asset.download
+          ? {
+              download: true,
+              ...(asset.fileName !== undefined ? { fileName: asset.fileName } : {}),
+              ...(asset.mimeType !== undefined ? { mimeType: asset.mimeType } : {}),
+            }
+          : undefined,
+      ),
     }).pipe(
       Effect.orElseSucceed(() => HttpServerResponse.text("Internal Server Error", { status: 500 })),
     );
@@ -308,6 +371,45 @@ export const mirrorBundleRouteLayer = Layer.mergeAll(
       return HttpServerResponse.empty({ status: 204 });
     }),
   ),
+);
+
+export const attachmentUploadRouteLayer = HttpRouter.add(
+  "POST",
+  `${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/*`,
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const url = HttpServerRequest.toURL(request);
+    if (Option.isNone(url)) {
+      return HttpServerResponse.text("Bad Request", { status: 400 });
+    }
+
+    const token = url.value.pathname.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length);
+    if (!token) {
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    }
+    const claims = yield* validateAttachmentUploadToken(token);
+    if (!claims) {
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    }
+
+    const contentLengthHeader = request.headers["content-length"];
+    if (
+      contentLengthHeader !== undefined &&
+      (!Number.isInteger(Number(contentLengthHeader)) ||
+        Number(contentLengthHeader) !== claims.sizeBytes)
+    ) {
+      return HttpServerResponse.text("Content-Length must match the upload size.", {
+        status: 400,
+      });
+    }
+
+    // Keep the request stream in the route scope until the response is sent.
+    const bodyPull = yield* Stream.toPull(request.stream);
+    const stored = yield* storeAttachmentUpload(claims, Stream.fromPull(Effect.succeed(bodyPull)));
+    return stored.ok
+      ? HttpServerResponse.empty({ status: 204 })
+      : HttpServerResponse.text(stored.detail, { status: stored.status });
+  }),
 );
 
 export const staticAndDevRouteLayer = HttpRouter.add(
