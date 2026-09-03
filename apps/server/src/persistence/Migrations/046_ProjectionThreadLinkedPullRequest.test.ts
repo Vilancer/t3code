@@ -8,7 +8,7 @@ import * as NodeSqliteClient from "../NodeSqliteClient.ts";
 
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
 
-layer("042_ProjectionThreadLinkedPullRequest", (it) => {
+layer("046_ProjectionThreadLinkedPullRequest", (it) => {
   it.effect("adds the linked pull request column", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;

@@ -53,9 +53,13 @@ import Migration0037 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
 import Migration0038 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
 import Migration0039 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
 import Migration0040 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
-import Migration0041 from "./Migrations/041_AuthSessionClientConnection.ts";
-import Migration0042 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
-import Migration0043 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
+import Migration0041 from "./Migrations/041_ProjectionProjectsOrigin.ts";
+import Migration0042 from "./Migrations/042_MirrorRuntime.ts";
+import Migration0043 from "./Migrations/043_MirrorSubmoduleState.ts";
+import Migration0044 from "./Migrations/044_ProjectionProjectsMirrorIncludeIgnoredFiles.ts";
+import Migration0045 from "./Migrations/045_AuthSessionClientConnection.ts";
+import Migration0046 from "./Migrations/046_ProjectionThreadLinkedPullRequest.ts";
+import Migration0047 from "./Migrations/047_ProjectionThreadsUnsettledAt.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -108,9 +112,13 @@ export const migrationEntries = [
   [38, "ProjectionThreadsPinOrderKey", Migration0038],
   [39, "ProjectionProjectsDefaultThreadEnvMode", Migration0039],
   [40, "ProjectionProjectFaviconPath", Migration0040],
-  [41, "AuthSessionClientConnection", Migration0041],
-  [42, "ProjectionThreadLinkedPullRequest", Migration0042],
-  [43, "ProjectionThreadsUnsettledAt", Migration0043],
+  [41, "ProjectionProjectsOrigin", Migration0041],
+  [42, "MirrorRuntime", Migration0042],
+  [43, "MirrorSubmoduleState", Migration0043],
+  [44, "ProjectionProjectsMirrorIncludeIgnoredFiles", Migration0044],
+  [45, "AuthSessionClientConnection", Migration0045],
+  [46, "ProjectionThreadLinkedPullRequest", Migration0046],
+  [47, "ProjectionThreadsUnsettledAt", Migration0047],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
