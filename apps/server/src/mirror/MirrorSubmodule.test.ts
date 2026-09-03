@@ -18,7 +18,7 @@ import * as MirrorServiceModule from "./MirrorService.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import * as NodeSqliteClient from "../persistence/NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { runMigrations } from "../persistence/Migrations.ts";
 import {
   ProjectionProjectRepository,
@@ -398,6 +398,7 @@ it.layer(TestLayer)("MirrorService submodules", (it) => {
             defaultModelSelection: null,
             defaultThreadEnvMode: null,
             mirrorIncludeIgnoredFiles: null,
+            autoPull: false,
             scripts: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
@@ -451,6 +452,7 @@ it.layer(TestLayer)("MirrorService submodules", (it) => {
             defaultModelSelection: null,
             defaultThreadEnvMode: null,
             mirrorIncludeIgnoredFiles: null,
+            autoPull: false,
             scripts: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
@@ -503,6 +505,7 @@ it.layer(TestLayer)("MirrorService submodules", (it) => {
             defaultModelSelection: null,
             defaultThreadEnvMode: null,
             mirrorIncludeIgnoredFiles: null,
+            autoPull: false,
             scripts: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
@@ -584,6 +587,7 @@ it.layer(TestLayer)("MirrorService submodules", (it) => {
             defaultModelSelection: null,
             defaultThreadEnvMode: null,
             mirrorIncludeIgnoredFiles: null,
+            autoPull: false,
             scripts: [],
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",

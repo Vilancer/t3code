@@ -7,7 +7,7 @@ import { describe, expect } from "vite-plus/test";
 import * as MirrorBundleTransfer from "./MirrorBundleTransfer.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import * as NodeSqliteClient from "../persistence/NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 const TestLayer = Layer.effect(
   MirrorBundleTransfer.MirrorBundleTransfer,
